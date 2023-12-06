@@ -1468,6 +1468,22 @@ section {
   color: #fff;
 }
 
+.pricing .icon-box-pricing:hover {
+  background: #3fbbc0;
+  top: 0;
+  border-radius: 0px;
+}
+
+.pricing .icon-box-pricing:hover h4 {
+  color: #fff;
+}
+
+/* .pricing .icon-box-pricing:hover h3 {
+  color: #3fbbc0; 
+  background: #ffffff; 
+} */
+
+
 /*--------------------------------------------------------------
 # Frequently Asked Questioins
 --------------------------------------------------------------*/
