@@ -16,7 +16,6 @@
 
 #include <DHT.h>
 #include <Servo.h>
-#include <Wire.h>
 #include "SR04.h"
 
 #define SECRET_SSID ""
@@ -47,32 +46,48 @@ SR04 sr04 = SR04(ECHO_PIN, TRIG_PIN);
 Servo monServo;
 
 // Définition des broches
-#define DHTPIN 2
-#define DHTTYPE DHT11
-#define ledVerte 4
-#define ledRouge 6
-#define ledOrange 3
+#define DHTPIN 2 // Broche à laquelle est connecté le capteur DHT
+#define DHTTYPE DHT11 // Type de capteur DHT utilisé
+#define ledVerte 4 // Broche de la LED Verte (Relais 2)
+#define ledRouge 6// Broche de la LED Rouge (Relais 1)
+#define ledOrange 3 // Broche de la LED Orange (LED 3)
 #define ledBleu 7
-#define CapteurPIR 8
+#define CapteurPIR 8 // Broche à laquelle est connecté le capteur de mouvement (PIR)
 
+// Création d'une instance de l'objet DHT
 DHT dht(DHTPIN, DHTTYPE);
 
 unsigned long previousMillisTemp = 0;
 unsigned long previousMillisMotion = 0;
 unsigned long previousMillisDistance = 0;
 
-const long intervalTemp = 5000;
-const long intervalMotion = 5000;
-const long intervalDistance = 5000;
+const long intervalTemp = 5000;     // Interval de 5 secondes pour la température
+const long intervalMotion = 5000;   // Interval de 5 secondes pour le capteur PIR
+const long intervalDistance = 5000; // Interval de 5 secondes pour la distance
 
-const int orangeLEDDuration = 5000;
+// Définir une constante pour la durée pendant laquelle la LED Orange est allumée
+const int orangeLEDDuration = 5000;  // 5 secondes
 
-unsigned long orangeLEDStartTime = 0;
+unsigned long orangeLEDStartTime = 0;  // Variable pour enregistrer le moment où la LED Orange a été allumée
 
 void setup() {
   delay(1000);
   Serial.begin(9600);
   pinMode(9, OUTPUT);      // set the LED pin mode
+
+  monServo.attach(11); // Broche DATA du Servomoteur
+
+  // Configuration de la broche du capteur de mouvement en entrée
+  pinMode(CapteurPIR, INPUT);
+
+  // Configuration des broches en sortie pour les LED
+  pinMode(ledVerte, OUTPUT);       
+  pinMode(ledRouge, OUTPUT); 
+  pinMode(ledOrange, OUTPUT);
+  pinMode(ledBleu, OUTPUT);
+
+  // Initialisation du capteur DHT  
+  dht.begin(); 
 
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
@@ -97,7 +112,7 @@ void setup() {
     delay(10000);
   }
   server.begin();                           // start the web server on port 80
-  printWifiStatus();
+  printWifiStatus(); 
 }
 
 //=======================================================================
@@ -132,8 +147,14 @@ void setup() {
 //=======================================================================
 
 void loop() {
-   unsigned long currentMillis = millis();
+  unsigned long currentMillis = millis();
 
+  String temperature = "";   
+  String humidite = "";
+  String presence = "";
+  String distanceString = "";
+
+  // Lecture et affichage de la température et de l'humidité
   if (currentMillis - previousMillisTemp >= intervalTemp) {
     previousMillisTemp = currentMillis;
 
@@ -143,61 +164,68 @@ void loop() {
     temperature = String(dht.readTemperature());
     humidite = String(dht.readHumidity());
 
+    // Contrôle de la LED Rouge en fonction de la température
     if (dht.readTemperature() < 19) {
-      digitalWrite(ledRouge, HIGH);
+      digitalWrite(ledRouge, HIGH); // Allumage de la LED Rouge (Relais 1)
     } else {
-      digitalWrite(ledRouge, LOW);
+      digitalWrite(ledRouge, LOW); // Extinction de la LED Rouge (Relais 1)
     }
 
+    // Contrôle de la LED Verte en fonction de la température
     if (dht.readTemperature() > 26) {
-      digitalWrite(ledVerte, HIGH);
+      digitalWrite(ledVerte, HIGH); // Allumage de la LED Verte (Relais 2)
     } else {
-      digitalWrite(ledVerte, LOW);
+      digitalWrite(ledVerte, LOW); // Extinction de la LED Verte (Relais 2)
     }
 
+    // Contrôle de la LED Verte en fonction de le taux de l'humidité
     if (dht.readHumidity() > 60) {
-      digitalWrite(ledVerte, HIGH);
+      digitalWrite(ledVerte, HIGH); // Allumage de la LED Verte (Relais 2)
     } else {
-      digitalWrite(ledVerte, LOW);
+      digitalWrite(ledVerte, LOW); // Extinction de la LED Verte (Relais 2)
     }
   }
 
+  // Détection de mouvement avec le capteur PIR
   if (currentMillis - previousMillisMotion >= intervalMotion) {
     previousMillisMotion = currentMillis;
     presence = String(digitalRead(CapteurPIR));
 
     if (digitalRead(CapteurPIR) == HIGH) {
       Serial.println("mouvement detecte");
-      digitalWrite(ledRouge, HIGH);
-      digitalWrite(ledVerte, HIGH);
-      presence = "OUI"
+      digitalWrite(ledBleu, HIGH);
+      presence = "OUI";
     } else {
       Serial.println("pas de mouvement detecte");
-      digitalWrite(ledRouge, LOW);
-      digitalWrite(ledVerte, LOW);
-      presence = "NON"
+      digitalWrite(ledBleu, LOW);
+      presence = "NON";
     }
   }
 
   if (currentMillis - previousMillisDistance >= intervalDistance) {
     previousMillisDistance = currentMillis;
 
-    long distance = sr04.Distance();
+    long distance = sr04.Distance(); // Mesure de la distance avec le Sonar
     Serial.print(distance);
     Serial.println(" cm");
 
-    monServo.write(0);
+    monServo.write(0); // Position initiale du Servomoteur
 
     if (distance < 250) {
-      monServo.write(90);
-      digitalWrite(ledOrange, HIGH);
+      monServo.write(90); // Rotation du Servomoteur pour ouvrir le portail
+      digitalWrite(ledOrange, HIGH); // Allumage de la LED Orange (LED 3) pendant 5 secondes
+      
+      // Enregistrer le moment où la LED Orange a été allumée
       orangeLEDStartTime = currentMillis;
-
-      digitalWrite(ledOrange, LOW);
-      monServo.write(0);
-
-    distance = String(distance);
     }
+
+    // Éteindre la LED Orange après orangeLEDDuration
+    if (currentMillis - orangeLEDStartTime >= orangeLEDDuration) {
+      digitalWrite(ledOrange, LOW); // Extinction de la LED Orange (LED 3)
+      monServo.write(0); // Retour du Servomoteur à la position initiale
+    }
+
+    distanceString = String(distance);
   }
 
   WiFiClient client = server.available();
@@ -219,8 +247,8 @@ void loop() {
 
             // Your additional code here
             String getData, Link;
-            // getData = "Température = " + temperature + "&Humidité = " + humidite + "&Présence = " + presence + "&Distance = " + distance ;  //Note "?" added at front
-            getData = "Température=" + String(random(30, 40)) + "&Humidité=" + String(random(30, 40)) + "&Présence=" + String(random(30, 40)) + "&Distance=" + String(random(30, 40));
+            getData = "Température = " + temperature + "&Humidité = " + humidite + "&Présence = " + presence + "&Distance = " + distanceString ;  //Note "?" added at front
+            // getData = "Température=" + String(random(30, 40)) + "&Humidité=" + String(random(30, 40)) + "&Présence=" + String(random(30, 40)) + "&Distance=" + String(random(30, 40));
             Link = "http://10.10.39.222/demo/getdemo.php" + getData;
 
             // Making HTTP request
